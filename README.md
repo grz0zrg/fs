@@ -1,5 +1,5 @@
 # fs
-GLSL powered HTML5 web audio spectral synthesizer
+[GLSL powered HTML5 web audio spectral synthesizer](https://grz0zrg.github.io/fs/)
 
 [Explanation](http://www.garzul.tonsite.biz/wordpress/2016/07/23/fragment-synthes…tral-synthesizer/)
 

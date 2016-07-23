@@ -1,7 +1,7 @@
 # fs
 [GLSL powered HTML5 web audio spectral synthesizer](https://grz0zrg.github.io/fs/)
 
-[Explanation](http://www.garzul.tonsite.biz/wordpress/2016/07/23/fragment-synthes…tral-synthesizer/)
+[Explanation](http://www.garzul.tonsite.biz/wordpress/2016/07/23/fragment-synthesizer-glsl-powered-html5-spectral-synthesizer/)
 
 This make use of the [WUI](https://github.com/grz0zrg/wui), [CodeMirror](https://codemirror.net/) library
 

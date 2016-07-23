@@ -1,0 +1,110 @@
+<!DOCTYPE html>
+<html>
+    <head>
+		<meta http-equiv="content-type" content="text/html; charset=utf-8">
+
+        <meta name="apple-mobile-web-app-capable" content="yes">
+        <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+        <meta name="viewport" content="width=device-width, user-scalable=no, initial-scale=1.0, minimum-scale=1.0, maximum-scale=1.0" />
+        
+        <link rel="shortcut icon" type="image/png" href="favicon.png" />
+        
+        <title>Fragment Synthesizer by Julien Verneuil</title>
+        
+        <link rel="stylesheet" type="text/css" href="dist/fs.min.css"/>
+        
+        <script type="x-webgl/x-vertex-shader" id="vertex-shader">
+            attribute vec2 position; void main() { gl_Position = vec4(position, 0, 1); }
+        </script>
+
+        <script type="x-webgl/x-fragment-shader" id="fragment-shader">
+precision mediump float;
+
+uniform float globalTime;
+uniform vec2 resolution;
+
+float hash( float n ) { return fract(sin(n)*753.5453123); }
+
+float noise( in vec2 x )
+{
+    vec2 p = floor(x);
+    vec2 f = fract(x);
+    f = f*f*(3.0-2.0*f);
+
+    float n = p.x + p.y*157.0;
+    return mix(
+                    mix( hash(n+  0.0), hash(n+  1.0),f.x),
+                    mix( hash(n+157.0), hash(n+158.0),f.x),
+            f.y);
+}
+
+float fbm(vec2 p, vec3 a)
+{
+     float v = 0.0;
+     v += noise(p*a.x)*.5;
+     v += noise(p*a.y)/1.25;
+     v += noise(p*a.z)*.125;
+     return v;
+}
+
+vec3 drawLines( vec2 uv, vec3 fbmOffset, vec3 color1, vec3 color2 )
+{
+    float timeVal = globalTime * 0.1;
+    vec3 finalColor = vec3( 0.0 );
+
+    for( int i=0; i < 6; ++i )
+    {
+        float indexAsFloat = float(i);
+        float amp = 100.0 + (indexAsFloat*7.0);
+        float period = 0.5 + (indexAsFloat+.001);
+        float thickness = 0.5;//mix( 0.9, 0.0, noise(uv*4.0) ) * 2.;
+        float t = abs( 0.9 / (sin(uv.x + fbm( uv + timeVal * period, fbmOffset)) * amp) * thickness );
+
+        finalColor +=  t * color2 * 0.6;
+    }
+
+    return finalColor;
+}
+
+void main()
+{
+    vec2 uv = ( gl_FragCoord.xy / resolution.xy ) * 2.0 - 1.1;
+    uv.x *= resolution.x/resolution.y;
+    uv.xy = uv.yx;
+  
+	float t = sin( globalTime ) * 0.5 + 0.5;
+  
+    vec3 lineColor1 = vec3( 1, 1, 0 );
+    vec3 lineColor2 = vec3( cos(t * uv.x) - uv.x, t-uv.x, 0 );
+
+    vec3 finalColor = vec3(0.0);
+
+
+    
+    float pulse = mix( 0.50, 0.8, t);
+
+    finalColor += drawLines( uv, vec3( 1.4, 0.0, 0.0), lineColor1, lineColor2 ) * pulse;
+    finalColor += drawLines( uv, vec3( 0.0, 0.8, 1.0), lineColor1, lineColor2 );
+
+    gl_FragColor = vec4( finalColor, 1.0 );
+}
+        </script>
+
+        <script type="text/javascript" src="dist/fs.min.js" defer></script>
+    </head>
+
+    <body>
+        <div id="fail" class="fail"></div>
+        <div id="canvas" class="canvas">
+            <div id="play_position_marker" class="play-position-marker">
+                <div class="play-position-triangle"></div>
+            </div>
+        </div>
+        <div id="code" class="code"></div>
+        <div class="controller">
+            <div id="mst_slider" class="mst-slider"></div>
+            <div id="toolbar"></div>
+            <div id="play_position_slider" class="play-position-slider"></div>
+        </div>
+    </body>
+</html>

@@ -11,7 +11,7 @@ This make use of the [WUI](https://github.com/grz0zrg/wui), [CodeMirror](https:/
 
 ####Building
 
-This was built with a not yet released live build system (just a simple pre-processor looking for modifications and which executes programs when the build is finished) written with the Anubis language but the project can be built out of the box easily if you find a way to run a custom pre-processor on **js/app_fs.js** and **css/app_fs.css** files which look for the /*include filename*/ directive and include the file **filename** content.
+This was built with a not yet released live build system (just a simple pre-processor looking for modifications and which executes programs when the build is finished) written with the [Anubis language](https://fr.wikipedia.org/wiki/Anubis_(langage)) but the project can be built out of the box easily if you find a way to run a custom pre-processor on **js/app_fs.js** and **css/app_fs.css** files which look for the /*include filename*/ directive and include the file **filename** content.
 
 ####Development
 

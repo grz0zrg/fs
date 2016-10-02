@@ -96,11 +96,11 @@ canvas {
 .play-position-triangle {
     width: 0;
     height: 0;
-    left: -8px;
+    left: -10px;
     position: absolute;
-    border-left: 8px solid transparent;
-    border-right: 8px solid transparent;
-    border-top: 8px solid #90A800;
+    border-left: 10px solid transparent;
+    border-right: 10px solid transparent;
+    border-top: 10px solid #90A800;
 }
 
 .code {
@@ -109,4 +109,22 @@ canvas {
 
 .CodeMirror {
     height: 100%;
+}
+
+.fs-load-indicator {
+    width: 16px;
+    height: 16px;
+    
+    background-color: green;
+    
+    position: absolute;
+    
+    top: 2px;
+    right: 2px;
+    
+    z-index: 2;
+}
+
+.fs-hide {
+    display: none;
 }

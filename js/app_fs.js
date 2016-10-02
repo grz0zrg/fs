@@ -2,8 +2,10 @@
 /* jshint globalstrict: false */
 /* global CodeMirror, performance*/
 
-/*#include wui/wui.min.js*/
+// WUI - https://github.com/grz0zrg/wui
+/*#include wui/wui.js*/
 
+// CodeMirror - https://codemirror.net/
 /*#include codemirror/codemirror.js*/
 /*#include codemirror/addon/search/searchcursor.js*/
 /*#include codemirror/addon/search/match-highlighter.js*/
@@ -13,11 +15,11 @@
 /*#include codemirror/addon/selection/active-line.js*/
 /*#include codemirror_glsl.js*/
 
-var FragmentSynth = new (function() {
+var FragmentSynth = new (function () {
     "use strict";
     
     /***********************************************************
-        Global.
+        Globals.
     ************************************************************/
     
     window.performance = window.performance || {};
@@ -33,7 +35,7 @@ var FragmentSynth = new (function() {
     window.AudioContext = window.AudioContext || window.webkitAudioContext || false;
     
     window.requestAnimationFrame =  window.requestAnimationFrame || window.mozRequestAnimationFrame ||
-                                    window.webkitRequestAnimationFrame || window.msRequestAnimationFrame;
+                                    window.webkitRequestAnimationFrame || window.msRequestAnimationFrame
     window.cancelAnimationFrame = window.cancelAnimationFrame || window.mozCancelAnimationFrame;
     
     if (!window.AudioContext) {
@@ -46,12 +48,14 @@ var FragmentSynth = new (function() {
         Fields.
     ************************************************************/
     
-    var _audio_context = new window.AudioContext(),
-    
+    var _canvas_container = document.getElementById("canvas_container"),
         _canvas,
         
         _canvas_width  = window.innerWidth,
         _canvas_height = Math.round(window.innerHeight / 2),
+        
+        _canvas_width_m1 = _canvas_width - 1,
+        _canvas_height_mul4 = _canvas_height * 4,
         
         _render_width = _canvas_width,
         _render_height = _canvas_height,
@@ -64,16 +68,12 @@ var FragmentSynth = new (function() {
         _my,
         
         _fps = 60,
-        
-        _volume = 0.05,
-        
-        _play_position = 0.5725,
-        
+
         _raf,
         
         _gl,
         
-        _play_position_element = document.getElementById("play_position_marker"),
+        _play_position_markers = [],
         
         _fail_element = document.getElementById("fail"),
     
@@ -83,79 +83,19 @@ var FragmentSynth = new (function() {
         
         _program,
         
-        _sample_rate = _audio_context.sampleRate,
+        _time = performance.now();
     
-        _wavetable_size = 32768,
-        
-        _wavetable = (function (wsize) {
-                var wavetable = new Float32Array(wsize),
-
-                    wave_phase = 0,
-                    wave_phase_step = 2 * Math.PI / wsize,
-
-                    s = 0;
-
-                for (s = 0; s < wsize; s += 1) {
-                    wavetable[s] = Math.sin(wave_phase);
-
-                    wave_phase += wave_phase_step;
-                }
-
-                return wavetable;
-            })(_wavetable_size),
-        
-        _oscillators,
-        
-        _note_buffer = new Float32Array(_canvas_height * 5),
-        
-        _data = new Uint8Array(_canvas_height * 4),
-        
-        _prev_data = _data,
-        
-        _time = performance.now(),
-        
-        _note_time = 1 / _fps,
-        _note_time_samples = Math.round(_note_time * _sample_rate),
-        
-        _curr_sample = 0,
-        _lerp_t = 0,
-        _swap_buffer = true,
-        
-        _mst_gain_node,
-        _script_node;
     
+    /***********************************************************
+        App. Includes.
+    ************************************************************/
+    
+    /*#include widgets.js*/
+    /*#include audio.js*/
+
     /***********************************************************
         Functions.
     ************************************************************/
-
-    var _createGainNode = function (gain, dst) {
-        var gain_node = _audio_context.createGain();
-        gain_node.gain.value = gain;
-        gain_node.connect(dst);
-
-        return gain_node;
-    };
- 
-    var _generateOscillatorSet = function (n, base_frequency, octaves) {
-        var y = 0,
-            frequency = 0.0,
-            octave_length = n / octaves;
-        
-        _oscillators = [];
-
-        for (y = n; y >= 0; y -= 1) {
-            frequency = base_frequency * Math.pow(2, y / octave_length);
-
-            var osc = {
-                freq: frequency,
-                
-                phase_index: Math.random() * _wavetable_size, 
-                phase_step: frequency / _audio_context.sampleRate * _wavetable_size
-            };
-            
-            _oscillators.push(osc);
-        }
-    };
     
     var _fail = function (message) {
         _fail_element.innerHTML = message;
@@ -209,128 +149,9 @@ var FragmentSynth = new (function() {
         return shader;
     };
     
-    var _computeNoteBuffer = function () {
-        for (i = 0; i < _note_buffer.length; i += 1) {
-            _note_buffer[i] = 0;
-        }
-        
-        var note_buffer = _note_buffer,
-            pvl = 0, pvr = 0, pr, pg, r, g,
-            inv_full_brightness = 1 / 255.0,
-
-            dlen = _data.length,
-            y = _canvas_height - 1, i,
-            volume_l, volume_r,
-            index = 0;
-
-        for (i = 0; i < dlen; i += 4) {
-            pr = _prev_data[i];
-            pg = _prev_data[i + 1];
-            
-            r = _data[i];
-            g = _data[i + 1];
-
-            if (r > 0 || g > 0) {
-                volume_l = r * inv_full_brightness;
-                volume_r = g * inv_full_brightness;
-                
-                pvl = pr * inv_full_brightness;
-                pvr = pg * inv_full_brightness;
-
-                note_buffer[index] = y;
-                note_buffer[index + 1] = pvl;
-                note_buffer[index + 2] = pvr;
-                note_buffer[index + 3] = volume_l - pvl;
-                note_buffer[index + 4] = volume_r - pvr;
-            } else {
-                if (pr > 0 || pg > 0) {
-                    pvl = pr * inv_full_brightness;
-                    pvr = pg * inv_full_brightness;
-
-                    note_buffer[index] = y;
-                    note_buffer[index + 1] = pvl;
-                    note_buffer[index + 2] = pvr;
-                    note_buffer[index + 3] = -pvl;
-                    note_buffer[index + 4] = -pvr;
-                }
-            }
-
-            y -= 1;
-
-            index += 5;
-        }
-        
-        _prev_data = _data;
-        
-        _swap_buffer = true;
-    };
-    
-    var _audioProcess = function (audio_processing_event) {
-        var output_buffer = audio_processing_event.outputBuffer,
-            
-            output_data_l = output_buffer.getChannelData(0),
-            output_data_r = output_buffer.getChannelData(1),
-            
-            output_l = 0, output_r = 0,
-            
-            wavetable = _wavetable,
-            
-            note_buffer = _note_buffer,
-            note_buffer_len = note_buffer.length,
-            
-            wavetable_size_m1 = _wavetable_size - 1,
-            
-            osc,
-            
-            lerp_t_step = 1 / _note_time_samples,
-            
-            sample,
-            
-            s, j;
-        
-        for (sample = 0; sample < output_data_l.length; sample += 1) {
-            output_l = 0.0;
-            output_r = 0.0;
-
-            for (j = 0; j < note_buffer_len; j += 5) {
-                var osc_index         = note_buffer[j],
-                    previous_volume_l = note_buffer[j + 1],
-                    previous_volume_r = note_buffer[j + 2],
-                    diff_volume_l     = note_buffer[j + 3],
-                    diff_volume_r     = note_buffer[j + 4];
-
-                osc = _oscillators[osc_index];
-
-                s = wavetable[osc.phase_index & wavetable_size_m1];
-
-                output_l += (previous_volume_l + diff_volume_l * _lerp_t) * s;
-                output_r += (previous_volume_r + diff_volume_r * _lerp_t) * s;
-                    
-                osc.phase_index += osc.phase_step;
-                
-                if (osc.phase_index >= _wavetable_size) {
-                    osc.phase_index -= _wavetable_size;
-                }
-            }
-            
-            output_data_l[sample] = output_l;
-            output_data_r[sample] = output_r;
-            
-            _lerp_t += lerp_t_step;
-            
-            _curr_sample += 1;
-
-            if (_curr_sample >= _note_time_samples) {
-                _lerp_t = 0;
-
-                _curr_sample = 0;
-
-                _computeNoteBuffer();
-            }
-        }
-    };
-    
     var _compile = function () {
+        _showLoadIndicator();
+        
         _gl.deleteProgram(_program);
         
         var frag = _createShader(_gl.FRAGMENT_SHADER, _code_editor.getValue());
@@ -345,9 +166,6 @@ var FragmentSynth = new (function() {
             
             _fail_element.innerHTML = "";
             
-            window.cancelAnimationFrame(_raf);
-            _raf = window.requestAnimationFrame(_frame);
-            
             _gl.useProgram(_program);
 
             _gl.uniform2f(_gl.getUniformLocation(_program, "resolution"), _canvas.width, _canvas.height);
@@ -355,33 +173,86 @@ var FragmentSynth = new (function() {
             var position = _gl.getAttribLocation(_program, "position");
             _gl.enableVertexAttribArray(position);
             _gl.vertexAttribPointer(position, 2, _gl.FLOAT, false, 0, 0);
+            
+            window.cancelAnimationFrame(_raf);
+            _raf = window.requestAnimationFrame(_frame);
         } else {
             window.cancelAnimationFrame(_raf);
             
             _mst_gain_node.gain.value = 0.0;
         }
+        
+        _hideLoadIndicator();
     };
     
-    var _frame = function (raf_time) { 
+    var _frame = function (raf_time) {
+        var i = 0,
+            
+            play_position_marker,
+            play_position_marker_x = 0,
+            
+            buffer;
+        
         _gl.useProgram(_program);
-        _gl.uniform1f(_gl.getUniformLocation(_program, "globalTime"), (raf_time - _time) / 1000);
+        _gl.uniform1f(_gl.getUniformLocation(_program, "globalTime"), (/*raf_time*/performance.now() - _time) / 1000);
         _gl.uniform2f(_gl.getUniformLocation(_program, "iMouse"), _mx, _my);
 
         _gl.drawArrays(_gl.TRIANGLE_STRIP, 0, 4);
+        
+        if (_notesWorkerAvailable()) {
+            for (i = 0; i < _play_position_markers.length; i += 1) {
+                play_position_marker = _play_position_markers[i];
+                play_position_marker_x = play_position_marker.position;
 
-        if (_swap_buffer) {
-            _gl.readPixels((_canvas_width - 1) * _play_position, 0, 1, _canvas_height, _gl.RGBA, _gl.UNSIGNED_BYTE, _data);
+                
+                play_position_marker.prev_data = new Uint8Array(play_position_marker.data);
+                play_position_marker.data = new Uint8Array(_canvas_height_mul4);
 
-            _swap_buffer = false;
+                _gl.readPixels(play_position_marker_x, 0, 1, _canvas_height, _gl.RGBA, _gl.UNSIGNED_BYTE, play_position_marker.data);
+                
+                // make a copy of the buffer because workers will take it
+                buffer = new Uint8Array(play_position_marker.data);
+                
+                _submitNotesProcessing(play_position_marker.data, play_position_marker.prev_data);
+                
+                play_position_marker.data = buffer;
+            }
         }
-
+        
         _raf = window.requestAnimationFrame(_frame);
     };
     
-    var _setPlayPosition = function (percent) {
-        _play_position = percent;
+    var _setPlayPosition = function (play_position_marker_id, percent) {
+        var play_position_marker = _play_position_markers[play_position_marker_id],
+            
+            x = _canvas_width_m1 * percent;
         
-        _play_position_element.style.left = _canvas_width * _play_position + "px";
+        play_position_marker.position_percent = percent;
+        play_position_marker.position = x;
+
+        play_position_marker.element.style.left = x + "px";
+    };
+    
+    var _addPlayPositionMarker = function (percent) {
+        var play_position_marker_element = _domCreatePlayPositionMarker(_canvas),
+            play_position_marker_id = 0;
+        
+        _play_position_markers.push({
+                element: play_position_marker_element,
+                data: new Uint8Array(_canvas_height_mul4),
+                prev_data: new Uint8Array(_canvas_height_mul4),
+                position_percent: percent / 100, // play position (percent)
+                position: _canvas_width_m1 * (percent / 100)
+            });
+        
+        play_position_marker_id = _play_position_markers.length - 1;
+        
+        _setPlayPosition(play_position_marker_id, _play_position_markers[play_position_marker_id].position_percent);
+
+        WUI.draggable(play_position_marker_element, true, function (element, x) {
+                _setPlayPosition(play_position_marker_id, x / window.innerWidth);
+            });
+        WUI.lockDraggable(play_position_marker_element, 'y');
     };
 
     /***********************************************************
@@ -394,18 +265,6 @@ var FragmentSynth = new (function() {
             _mx = e.pageX / window.innerWidth;
             _my = e.pageY / window.innerHeight;
 	   });
-    
-    _mst_gain_node = _createGainNode(_volume, _audio_context.destination);
-    
-    _generateOscillatorSet(_canvas_height, 16.34, 10);
-    
-    _script_node = _audio_context.createScriptProcessor(0, 0, 2);
-    _script_node.onaudioprocess = _audioProcess;
-    
-    _script_node.connect(_mst_gain_node);
-    
-    // workaround, webkit bug
-    window._fs_sn = _script_node;
 
     _canvas = document.createElement("canvas");
 
@@ -415,7 +274,7 @@ var FragmentSynth = new (function() {
     _canvas.style.width  = _canvas_width  + 'px';
     _canvas.style.height = _canvas_height + 'px';
     
-    document.getElementById("canvas").appendChild(_canvas);
+    _canvas_container.appendChild(_canvas);
 
     _gl = _canvas.getContext("webgl", _webgl_opts) || _canvas.getContext("experimental-webgl", _webgl_opts);
     
@@ -440,9 +299,7 @@ var FragmentSynth = new (function() {
     
     _gl.uniform1f(_gl.getUniformLocation(_program, "globalTime"), _time);
     _gl.uniform2f(_gl.getUniformLocation(_program, "resolution"), _canvas.width, _canvas.height);
-    
-    _setPlayPosition(_play_position);
-    
+
     WUI_RangeSlider.create("mst_slider", {
         width: 180,
         height: 8,
@@ -466,26 +323,11 @@ var FragmentSynth = new (function() {
         }
     });
     
-    WUI_RangeSlider.create("play_position_slider", {
-        width: 180,
-        height: 8,
-            
-        min: 0,
-        max: 100,
-            
-        step: 0.25,
-        
-        default_value: _play_position * 100,
-            
-        title: "Position (%)",
-        
-        title_min_width: 80,
-        value_min_width: 48,
-            
-        on_change: function (value) {
-            _setPlayPosition(value / 100);
-        }
-    });
+    // setup at least one play position marker with one worker
+    _addPlayPositionMarker(25);
+    _addPlayPositionMarker(75);
+    _addNotesWorker();
+    _addNotesWorker();
     
     WUI_ToolBar.create("toolbar", {
             allow_groups_minimize: false
@@ -538,15 +380,16 @@ var FragmentSynth = new (function() {
     _raf = window.requestAnimationFrame(_frame);
     
     window.addEventListener("resize", function () {
+        var play_position_marker,
+        
+            i = 0;
+        
         _canvas_width  = window.innerWidth;
         _canvas_height = Math.round(window.innerHeight / 2);
         
+        _canvas_width_m1 = _canvas_width - 1;
+        _canvas_height_mul4 = _canvas_height * 4;
+
         _generateOscillatorSet(_canvas_height, 16.34, 10);
-        
-        _note_buffer = new Float32Array(_canvas_height * 5);
-        _data = new Uint8Array(_canvas_height * 4);
-        _prev_data = _data;
-        
-        _setPlayPosition(_play_position);
     });
 })();

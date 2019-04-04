@@ -162,7 +162,9 @@ var FragmentSynth = new (function () {
             );
         
         if (_program) {
-            _mst_gain_node.gain.value = _volume;
+            if (_mst_gain_node) {
+                _mst_gain_node.gain.value = _volume;
+            }
             
             _fail_element.innerHTML = "";
             
@@ -307,7 +309,7 @@ var FragmentSynth = new (function () {
         min: 0,
         max: 1,
             
-        step: 0.01,
+        step: 0.005,
         
         default_value: _volume,
             
@@ -324,8 +326,8 @@ var FragmentSynth = new (function () {
     });
     
     // setup at least one play position marker with one worker
-    _addPlayPositionMarker(25);
-    _addPlayPositionMarker(75);
+    _addPlayPositionMarker(50);
+    //_addPlayPositionMarker(75);
     _addNotesWorker();
     _addNotesWorker();
     
@@ -356,7 +358,16 @@ var FragmentSynth = new (function () {
                         
                         _compile();
                     }
-                }
+                },
+                {
+                    text: "play/pause",
+                    type: "button",
+                                        
+                    toggle_state: false,
+                    on_click: function () {
+                        _startStopAudio();
+                    }
+            }
             ]
         });
 

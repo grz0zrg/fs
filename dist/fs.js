@@ -13894,11 +13894,13 @@ var _domCreatePlayPositionMarker = function (hook_element) {
         Fields.
     ************************************************************/
 
-var _audio_context = new window.AudioContext(),
+var _audio_context = null,
     
-    _sample_rate = _audio_context.sampleRate,
+    _sample_rate = 0,
     
-    _volume = 0.01,
+    _volume = 0.005,
+
+    _paused = true,
 
     // wavetable
     _wavetable_size = 4096,
@@ -13922,7 +13924,7 @@ var _audio_context = new window.AudioContext(),
     _oscillators,
 
     _note_time = 1 / _fps,
-    _note_time_samples = Math.round(_note_time * _sample_rate),
+    _note_time_samples = 0,
 
     _curr_sample = 0,
     _lerp_t = 0,
@@ -14140,18 +14142,37 @@ var _audioProcess = function (audio_processing_event) {
     Init.
 ************************************************************/
 
-_mst_gain_node = _createGainNode(_volume, _audio_context.destination);
+var _startStopAudio = function () {
+    if (_paused) {
+        _paused = false;
+        if (_audio_context) {
+            _script_node.connect(_mst_gain_node);
+            return;
+        }
+    } else {
+        _script_node.disconnect(_mst_gain_node);
+        _paused = true;
+        return;
+    }
 
-_generateOscillatorSet(_canvas_height, 16.34, 10);
+    _audio_context = new window.AudioContext();
 
-_script_node = _audio_context.createScriptProcessor(0, 0, 2);
-_script_node.onaudioprocess = _audioProcess;
+    _sample_rate = _audio_context.sampleRate;
 
-_script_node.connect(_mst_gain_node);
+    _note_time_samples = Math.round(_note_time * _sample_rate);
 
-// workaround, webkit bug
-window._fs_sn = _script_node;
+	_mst_gain_node = _createGainNode(_volume, _audio_context.destination);
 
+	_generateOscillatorSet(_canvas_height, 16.34, 10);
+
+	_script_node = _audio_context.createScriptProcessor(0, 0, 2);
+	_script_node.onaudioprocess = _audioProcess;
+
+	_script_node.connect(_mst_gain_node);
+
+	// workaround, webkit bug
+	window._fs_sn = _script_node;
+}
     /***********************************************************
         Functions.
     ************************************************************/
@@ -14221,7 +14242,9 @@ window._fs_sn = _script_node;
             );
         
         if (_program) {
-            _mst_gain_node.gain.value = _volume;
+            if (_mst_gain_node) {
+                _mst_gain_node.gain.value = _volume;
+            }
             
             _fail_element.innerHTML = "";
             
@@ -14366,7 +14389,7 @@ window._fs_sn = _script_node;
         min: 0,
         max: 1,
             
-        step: 0.01,
+        step: 0.005,
         
         default_value: _volume,
             
@@ -14383,8 +14406,8 @@ window._fs_sn = _script_node;
     });
     
     // setup at least one play position marker with one worker
-    _addPlayPositionMarker(25);
-    _addPlayPositionMarker(75);
+    _addPlayPositionMarker(50);
+    //_addPlayPositionMarker(75);
     _addNotesWorker();
     _addNotesWorker();
     
@@ -14415,7 +14438,16 @@ window._fs_sn = _script_node;
                         
                         _compile();
                     }
-                }
+                },
+                {
+                    text: "play/pause",
+                    type: "button",
+                                        
+                    toggle_state: false,
+                    on_click: function () {
+                        _startStopAudio();
+                    }
+            }
             ]
         });
 
